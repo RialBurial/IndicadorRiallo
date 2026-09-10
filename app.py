@@ -128,7 +128,8 @@ def calcular_indicador_riallo(tickers):
     df_scores['RIALLO_SCORE'] = (df_scores['Salud']*PESOS_PILARES['Salud'] + df_scores['Calidad']*PESOS_PILARES['Calidad'] + df_scores['Valoracion']*PESOS_PILARES['Valoracion'] + df_scores['Retorno']*PESOS_PILARES['Retorno'])
     
     df_final = pd.merge(df[['Ticker', 'Sector', 'Precio']], df_scores[['Ticker', 'RIALLO_SCORE', 'Salud', 'Calidad', 'Valoracion', 'Retorno']], on='Ticker')
-    return df_final.sort_values(by='RIALLO_SCORE', ascending=False).round(2)
+    # SOLUCIÓN TÉCNICA: Reseteamos el índice de forma limpia antes de devolverlo
+    return df_final.sort_values(by='RIALLO_SCORE', ascending=False).reset_index(drop=True).round(2)
 
 # --- INTERFAZ DE USUARIO (UI) ---
 st.title("🦅 Dashboard Quant: Indicador Riallo")
@@ -178,12 +179,11 @@ if ejecutar:
         if not df_resultado.empty:
             # Lógica maestra de acumulación
             if 'datos_riallo' in st.session_state:
-                # Unimos los datos antiguos con los nuevos
-                df_acumulado = pd.concat([st.session_state['datos_riallo'], df_resultado])
-                # Eliminamos duplicados (ej: AAPL descargado dos veces) dejando la versión más reciente
+                # Unimos los datos antiguos con los nuevos (ignorando los índices viejos)
+                df_acumulado = pd.concat([st.session_state['datos_riallo'], df_resultado], ignore_index=True)
+                # Eliminamos duplicados y RESETEAMOS EL ÍNDICE para que el mapa de calor no crashee
                 df_acumulado = df_acumulado.drop_duplicates(subset=['Ticker'], keep='last')
-                # Reordenamos el ranking total
-                st.session_state['datos_riallo'] = df_acumulado.sort_values(by='RIALLO_SCORE', ascending=False)
+                st.session_state['datos_riallo'] = df_acumulado.sort_values(by='RIALLO_SCORE', ascending=False).reset_index(drop=True)
             else:
                 st.session_state['datos_riallo'] = df_resultado
         else:
@@ -194,6 +194,7 @@ if 'datos_riallo' in st.session_state:
     df_mostrar = st.session_state['datos_riallo']
     st.success(f"✅ Análisis completado. Base de datos actual: {len(df_mostrar)} activos.")
     
+    # El mapa de calor ahora tiene un índice perfecto de 0 a N
     st.dataframe(
         df_mostrar.style.background_gradient(cmap='RdYlGn', subset=['RIALLO_SCORE', 'Salud', 'Calidad', 'Valoracion', 'Retorno']),
         use_container_width=True,
