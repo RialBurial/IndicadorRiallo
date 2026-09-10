@@ -157,7 +157,7 @@ if borrar:
     except AttributeError:
         st.experimental_rerun()
 
-# Lógica de Ejecución (Guardando en la memoria de la sesión)
+# Lógica de Ejecución (Acumulativa)
 if ejecutar:
     lista_tickers = []
     
@@ -176,15 +176,23 @@ if ejecutar:
         df_resultado = calcular_indicador_riallo(lista_tickers)
         
         if not df_resultado.empty:
-            # Guardamos los datos calculados en la RAM de Streamlit
-            st.session_state['datos_riallo'] = df_resultado
+            # Lógica maestra de acumulación
+            if 'datos_riallo' in st.session_state:
+                # Unimos los datos antiguos con los nuevos
+                df_acumulado = pd.concat([st.session_state['datos_riallo'], df_resultado])
+                # Eliminamos duplicados (ej: AAPL descargado dos veces) dejando la versión más reciente
+                df_acumulado = df_acumulado.drop_duplicates(subset=['Ticker'], keep='last')
+                # Reordenamos el ranking total
+                st.session_state['datos_riallo'] = df_acumulado.sort_values(by='RIALLO_SCORE', ascending=False)
+            else:
+                st.session_state['datos_riallo'] = df_resultado
         else:
             st.error("No se han podido procesar datos. Verifica que los tickers sean correctos.")
 
 # Mostrar los datos y el botón de descarga SIEMPRE que existan en la memoria
 if 'datos_riallo' in st.session_state:
     df_mostrar = st.session_state['datos_riallo']
-    st.success("✅ Análisis completado con éxito.")
+    st.success(f"✅ Análisis completado. Base de datos actual: {len(df_mostrar)} activos.")
     
     st.dataframe(
         df_mostrar.style.background_gradient(cmap='RdYlGn', subset=['RIALLO_SCORE', 'Salud', 'Calidad', 'Valoracion', 'Retorno']),
@@ -199,9 +207,9 @@ if 'datos_riallo' in st.session_state:
     
     # Botón de descarga
     st.download_button(
-        label="📥 Descargar Excel al Escritorio",
+        label="📥 Descargar Ranking Maestro en Excel",
         data=buffer.getvalue(),
-        file_name="Indicador_Riallo.xlsx",
+        file_name="Indicador_Riallo_Acumulado.xlsx",
         mime="application/vnd.ms-excel",
         type="primary"
     )
