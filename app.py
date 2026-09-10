@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import io
-import requests
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Indicador Riallo | Quant Dashboard", layout="wide", page_icon="📈")
@@ -17,45 +16,43 @@ PESOS_INTRA = {
     'Shareholder_Yield': 1.00
 }
 
-# --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES (ROBUSTAS CON TIMEOUT) ---
+# --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES (BLINDADAS PARA LA NUBE) ---
 @st.cache_data(show_spinner=False)
 def obtener_tickers_indice(indice):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-    
     try:
-        # Añadido timeout=10 para que NUNCA se quede colgado cargando al infinito
         if indice == "Dow Jones (30)":
-            url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
-            html = requests.get(url, headers=headers, timeout=10).text
-            tablas = pd.read_html(io.StringIO(html))
-            for df in tablas:
-                for col in ['Symbol', 'Ticker', 'Ticker symbol']:
-                    if col in df.columns:
-                        return df[col].tolist()
-                        
+            return ["AAPL", "AMGN", "AXP", "BA", "CAT", "CRM", "CSCO", "CVX", "DIS", "DOW", 
+                    "GS", "HD", "HON", "IBM", "INTC", "JNJ", "JPM", "KO", "MCD", "MMM", 
+                    "MRK", "MSFT", "NKE", "PG", "TRV", "UNH", "V", "VZ", "WBA", "WMT"]
+                    
         elif indice == "S&P 500 (500)":
-            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            html = requests.get(url, headers=headers, timeout=10).text
-            tablas = pd.read_html(io.StringIO(html))
-            for df in tablas:
-                for col in ['Symbol', 'Ticker', 'Ticker symbol']:
-                    if col in df.columns:
-                        return df[col].str.replace('.', '-').tolist()
-                        
-        elif indice == "NASDAQ 100":
-            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-            html = requests.get(url, headers=headers, timeout=10).text
-            tablas = pd.read_html(io.StringIO(html))
-            for df in tablas:
-                for col in ['Symbol', 'Ticker', 'Ticker symbol', 'Ticker Symbol']:
-                    if col in df.columns:
-                        return df[col].tolist()
-                        
-        elif indice == "IBEX 35":
-            return ["SAN.MC", "BBVA.MC", "ITX.MC", "IBE.MC", "TEF.MC", "REP.MC", "AMS.MC", "AENA.MC", "FER.MC", "CABK.MC", "IAG.MC", "GRF.MC", "ENG.MC", "ELE.MC", "RED.MC", "NTGY.MC", "ACS.MC", "ANA.MC", "BKT.MC", "MAP.MC", "FDR.MC", "SAB.MC", "CLNX.MC", "MRL.MC", "COL.MC", "VIS.MC", "ROVI.MC", "LOG.MC", "UNI.MC", "MEL.MC", "ALM.MC", "IDR.MC", "SCYR.MC", "FLUI.MC", "CIE.MC"]
+            # Repositorio CSV estático y oficial en GitHub (nunca bloquea IPs)
+            url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
+            df = pd.read_csv(url)
+            return df['Symbol'].tolist()
             
+        elif indice == "NASDAQ 100":
+            # Top 100 representativo y estático para evitar caídas
+            return ["AAPL", "MSFT", "AMZN", "NVDA", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "ADBE", 
+                    "COST", "PEP", "CSCO", "NFLX", "AMD", "CMCSA", "TMUS", "INTC", "TXN", "INTU", 
+                    "AMGN", "QCOM", "HON", "AMAT", "SBUX", "BKNG", "MDLZ", "ISRG", "GILD", "LRCX", 
+                    "VRTX", "REGN", "ADI", "PANW", "ADP", "SNPS", "KLAC", "MELI", "CDNS", "CSX", 
+                    "PYPL", "MU", "MAR", "MNST", "ORLY", "ASML", "CTAS", "NXPI", "WDAY", "FTNT", 
+                    "CHTR", "PCAR", "LULU", "KDP", "DXCM", "PAYX", "MCHP", "AEP", "EXC", "ODFL", 
+                    "KHC", "BIIB", "CTSH", "EA", "VRSK", "FAST", "CPRT", "CRWD", "DLTR", "ROST", 
+                    "WBD", "SIRI", "CEG", "BKR", "FANG", "GFS", "ON", "MRVL", "TTD", "TEAM", 
+                    "DDOG", "ZS", "PDD", "CRSP", "WBA", "ILMN", "SPLK", "ROKU", "ZM", "DOCU", 
+                    "PTON", "MRNA", "LCID", "RIVN"]
+                    
+        elif indice == "IBEX 35":
+            return ["SAN.MC", "BBVA.MC", "ITX.MC", "IBE.MC", "TEF.MC", "REP.MC", "AMS.MC", "AENA.MC", 
+                    "FER.MC", "CABK.MC", "IAG.MC", "GRF.MC", "ENG.MC", "ELE.MC", "RED.MC", "NTGY.MC", 
+                    "ACS.MC", "ANA.MC", "BKT.MC", "MAP.MC", "FDR.MC", "SAB.MC", "CLNX.MC", "MRL.MC", 
+                    "COL.MC", "VIS.MC", "ROVI.MC", "LOG.MC", "UNI.MC", "MEL.MC", "ALM.MC", "IDR.MC", 
+                    "SCYR.MC", "FLUI.MC", "CIE.MC"]
+                    
     except Exception as e:
-        st.error(f"Aviso Quant: Fallo al conectar con la base de datos para {indice}. Intenta con tickers manuales.")
+        st.error(f"Aviso Quant: Fallo al cargar {indice}. Detalle: {e}")
         
     return []
 
@@ -154,15 +151,15 @@ with st.sidebar:
     with col2:
         borrar = st.button("🗑️ Borrar", use_container_width=True)
 
-# Lógica de borrado (Ahora purga la memoria completamente antes de recargar)
+# Lógica de borrado (Purga la memoria completamente antes de recargar)
 if borrar:
     st.cache_data.clear() # Limpia datos descargados
     for key in st.session_state.keys():
         del st.session_state[key] # Limpia las cajas de texto y selectores
     try:
-        st.rerun() # Reinicia la web (Streamlit moderno)
+        st.rerun() # Reinicia la web
     except AttributeError:
-        st.experimental_rerun() # Por si usas una versión más antigua
+        st.experimental_rerun()
 
 # Lógica de Ejecución
 if ejecutar:
