@@ -1,0 +1,7 @@
+streamlit
+yfinance
+pandas
+xlsxwriter
+lxml
+html5lib
+BeautifulSoup4
