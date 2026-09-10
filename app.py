@@ -26,13 +26,11 @@ def obtener_tickers_indice(indice):
                     "MRK", "MSFT", "NKE", "PG", "TRV", "UNH", "V", "VZ", "WBA", "WMT"]
                     
         elif indice == "S&P 500 (500)":
-            # Repositorio CSV estático y oficial en GitHub (nunca bloquea IPs)
             url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
             df = pd.read_csv(url)
             return df['Symbol'].tolist()
             
         elif indice == "NASDAQ 100":
-            # Top 100 representativo y estático para evitar caídas
             return ["AAPL", "MSFT", "AMZN", "NVDA", "META", "GOOGL", "GOOG", "TSLA", "AVGO", "ADBE", 
                     "COST", "PEP", "CSCO", "NFLX", "AMD", "CMCSA", "TMUS", "INTC", "TXN", "INTU", 
                     "AMGN", "QCOM", "HON", "AMAT", "SBUX", "BKNG", "MDLZ", "ISRG", "GILD", "LRCX", 
@@ -71,7 +69,7 @@ def calcular_indicador_riallo(tickers):
             info = stock.info
             
             mcap = info.get('marketCap', 0)
-            if mcap < 300000000: # Filtro $300M
+            if mcap < 300000000:
                 continue
                 
             ebitda = info.get('ebitda', 0)
@@ -97,7 +95,7 @@ def calcular_indicador_riallo(tickers):
                 'Share_Yield': div_yield + 0.02
             })
         except Exception:
-            pass # Ignoramos tickers con error (delistados o sin datos)
+            pass
             
         progress_bar.progress((i + 1) / total)
         
@@ -122,7 +120,6 @@ def calcular_indicador_riallo(tickers):
         else:
             df_scores[f'{col}_Score'] = df[col].rank(pct=True, ascending=True) * 100
             
-    # Algoritmo
     df_scores['Salud'] = (df_scores['Deuda_EBITDA_Score']*PESOS_INTRA['Deuda_EBITDA'] + df_scores['Piotroski_Score']*PESOS_INTRA['Piotroski'] + df_scores['Cobertura_Int_Score']*PESOS_INTRA['Cobertura_Int'] + df_scores['Quick_Ratio_Score']*PESOS_INTRA['Quick_Ratio'])
     df_scores['Calidad'] = (df_scores['ROIC_Score']*PESOS_INTRA['ROIC'] + df_scores['Crec_Ventas_Score']*PESOS_INTRA['Crec_Ventas_3Y'] + df_scores['GPA_Score']*PESOS_INTRA['GPA'])
     df_scores['Valoracion'] = (df_scores['P_FCF_FWD_Score']*PESOS_INTRA['P_FCF_FWD'] + df_scores['EV_EBITDA_FWD_Score']*PESOS_INTRA['EV_EBITDA_FWD'] + df_scores['PEG_Score']*PESOS_INTRA['PEG'])
@@ -141,7 +138,6 @@ st.markdown("Plataforma institucional para el análisis y ranking de activos med
 with st.sidebar:
     st.header("⚙️ Configuración")
     
-    # Inputs con 'key' para poder resetearlos correctamente
     tickers_input = st.text_input("Tickers individuales (ej. AAPL, MSFT, TSLA):", key="input_tickers")
     indice_seleccionado = st.selectbox("Añadir un Índice completo:", ["Ninguno", "Dow Jones (30)", "IBEX 35", "NASDAQ 100", "S&P 500 (500)"], key="input_indice")
     
@@ -151,17 +147,17 @@ with st.sidebar:
     with col2:
         borrar = st.button("🗑️ Borrar", use_container_width=True)
 
-# Lógica de borrado (Purga la memoria completamente antes de recargar)
+# Lógica de borrado (Purga la memoria completamente)
 if borrar:
-    st.cache_data.clear() # Limpia datos descargados
+    st.cache_data.clear()
     for key in st.session_state.keys():
-        del st.session_state[key] # Limpia las cajas de texto y selectores
+        del st.session_state[key]
     try:
-        st.rerun() # Reinicia la web
+        st.rerun()
     except AttributeError:
         st.experimental_rerun()
 
-# Lógica de Ejecución
+# Lógica de Ejecución (Guardando en la memoria de la sesión)
 if ejecutar:
     lista_tickers = []
     
@@ -177,28 +173,35 @@ if ejecutar:
         st.warning("⚠️ Introduce al menos un ticker o selecciona un índice.")
     else:
         st.info(f"Procesando {len(lista_tickers)} activos. Esto puede tardar unos segundos...")
-        
         df_resultado = calcular_indicador_riallo(lista_tickers)
         
         if not df_resultado.empty:
-            st.success("✅ Análisis completado con éxito.")
-            
-            st.dataframe(
-                df_resultado.style.background_gradient(cmap='RdYlGn', subset=['RIALLO_SCORE', 'Salud', 'Calidad', 'Valoracion', 'Retorno']),
-                use_container_width=True,
-                height=500
-            )
-            
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                df_resultado.to_excel(writer, sheet_name='Ranking Riallo', index=False)
-            
-            st.download_button(
-                label="📥 Descargar Excel al Escritorio",
-                data=buffer.getvalue(),
-                file_name="Indicador_Riallo.xlsx",
-                mime="application/vnd.ms-excel",
-                type="primary"
-            )
+            # Guardamos los datos calculados en la RAM de Streamlit
+            st.session_state['datos_riallo'] = df_resultado
         else:
             st.error("No se han podido procesar datos. Verifica que los tickers sean correctos.")
+
+# Mostrar los datos y el botón de descarga SIEMPRE que existan en la memoria
+if 'datos_riallo' in st.session_state:
+    df_mostrar = st.session_state['datos_riallo']
+    st.success("✅ Análisis completado con éxito.")
+    
+    st.dataframe(
+        df_mostrar.style.background_gradient(cmap='RdYlGn', subset=['RIALLO_SCORE', 'Salud', 'Calidad', 'Valoracion', 'Retorno']),
+        use_container_width=True,
+        height=500
+    )
+    
+    # Preparar Excel en buffer
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        df_mostrar.to_excel(writer, sheet_name='Ranking Riallo', index=False)
+    
+    # Botón de descarga
+    st.download_button(
+        label="📥 Descargar Excel al Escritorio",
+        data=buffer.getvalue(),
+        file_name="Indicador_Riallo.xlsx",
+        mime="application/vnd.ms-excel",
+        type="primary"
+    )
