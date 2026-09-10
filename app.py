@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import io
+import requests
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Indicador Riallo | Quant Dashboard", layout="wide", page_icon="📈")
@@ -19,21 +20,31 @@ PESOS_INTRA = {
 # --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES ---
 @st.cache_data(show_spinner=False)
 def obtener_tickers_indice(indice):
+    # Camuflaje: Simulamos ser un navegador Chrome en Windows para que Wikipedia no nos bloquee
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    
     if indice == "Dow Jones (30)":
         url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
-        df = pd.read_html(url)[1]
+        html = requests.get(url, headers=headers).text
+        df = pd.read_html(io.StringIO(html))[1]
         return df['Symbol'].tolist()
+        
     elif indice == "S&P 500 (500)":
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        df = pd.read_html(url)[0]
+        html = requests.get(url, headers=headers).text
+        df = pd.read_html(io.StringIO(html))[0]
         return df['Symbol'].str.replace('.', '-').tolist()
+        
     elif indice == "NASDAQ 100":
         url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-        df = pd.read_html(url)[4]
+        html = requests.get(url, headers=headers).text
+        df = pd.read_html(io.StringIO(html))[4]
         return df['Ticker'].tolist()
+        
     elif indice == "IBEX 35":
         # Hardcodeado por la dificultad de scraping limpio del IBEX en Wikipedia
         return ["SAN.MC", "BBVA.MC", "ITX.MC", "IBE.MC", "TEF.MC", "REP.MC", "AMS.MC", "AENA.MC", "FER.MC", "CABK.MC", "IAG.MC", "GRF.MC", "ENG.MC", "ELE.MC", "RED.MC", "NTGY.MC", "ACS.MC", "ANA.MC", "BKT.MC", "MAP.MC", "FDR.MC", "SAB.MC", "CLNX.MC", "MRL.MC", "COL.MC", "VIS.MC", "ROVI.MC", "LOG.MC", "UNI.MC", "MEL.MC", "ALM.MC", "IDR.MC", "SCYR.MC", "FLUI.MC", "CIE.MC"]
+        
     return []
 
 # --- MOTOR QUANT (INDICADOR RIALLO) ---
