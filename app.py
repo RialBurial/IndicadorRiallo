@@ -17,15 +17,16 @@ PESOS_INTRA = {
     'Shareholder_Yield': 1.00
 }
 
-# --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES (ROBUSTAS) ---
+# --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES (ROBUSTAS CON TIMEOUT) ---
 @st.cache_data(show_spinner=False)
 def obtener_tickers_indice(indice):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     
     try:
+        # Añadido timeout=10 para que NUNCA se quede colgado cargando al infinito
         if indice == "Dow Jones (30)":
             url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
-            html = requests.get(url, headers=headers).text
+            html = requests.get(url, headers=headers, timeout=10).text
             tablas = pd.read_html(io.StringIO(html))
             for df in tablas:
                 for col in ['Symbol', 'Ticker', 'Ticker symbol']:
@@ -34,7 +35,7 @@ def obtener_tickers_indice(indice):
                         
         elif indice == "S&P 500 (500)":
             url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            html = requests.get(url, headers=headers).text
+            html = requests.get(url, headers=headers, timeout=10).text
             tablas = pd.read_html(io.StringIO(html))
             for df in tablas:
                 for col in ['Symbol', 'Ticker', 'Ticker symbol']:
@@ -43,7 +44,7 @@ def obtener_tickers_indice(indice):
                         
         elif indice == "NASDAQ 100":
             url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-            html = requests.get(url, headers=headers).text
+            html = requests.get(url, headers=headers, timeout=10).text
             tablas = pd.read_html(io.StringIO(html))
             for df in tablas:
                 for col in ['Symbol', 'Ticker', 'Ticker symbol', 'Ticker Symbol']:
@@ -54,7 +55,7 @@ def obtener_tickers_indice(indice):
             return ["SAN.MC", "BBVA.MC", "ITX.MC", "IBE.MC", "TEF.MC", "REP.MC", "AMS.MC", "AENA.MC", "FER.MC", "CABK.MC", "IAG.MC", "GRF.MC", "ENG.MC", "ELE.MC", "RED.MC", "NTGY.MC", "ACS.MC", "ANA.MC", "BKT.MC", "MAP.MC", "FDR.MC", "SAB.MC", "CLNX.MC", "MRL.MC", "COL.MC", "VIS.MC", "ROVI.MC", "LOG.MC", "UNI.MC", "MEL.MC", "ALM.MC", "IDR.MC", "SCYR.MC", "FLUI.MC", "CIE.MC"]
             
     except Exception as e:
-        st.error(f"Aviso Quant: Fallo al conectar con la base de datos de Wikipedia para {indice}. Intenta con tickers manuales.")
+        st.error(f"Aviso Quant: Fallo al conectar con la base de datos para {indice}. Intenta con tickers manuales.")
         
     return []
 
@@ -143,36 +144,36 @@ st.markdown("Plataforma institucional para el análisis y ranking de activos med
 with st.sidebar:
     st.header("⚙️ Configuración")
     
-    # 1. Tickers Individuales
-    tickers_input = st.text_input("Tickers individuales (ej. AAPL, MSFT, TSLA):")
+    # Inputs con 'key' para poder resetearlos correctamente
+    tickers_input = st.text_input("Tickers individuales (ej. AAPL, MSFT, TSLA):", key="input_tickers")
+    indice_seleccionado = st.selectbox("Añadir un Índice completo:", ["Ninguno", "Dow Jones (30)", "IBEX 35", "NASDAQ 100", "S&P 500 (500)"], key="input_indice")
     
-    # 2. Índices Completos
-    indice_seleccionado = st.selectbox("Añadir un Índice completo:", ["Ninguno", "Dow Jones (30)", "IBEX 35", "NASDAQ 100", "S&P 500 (500)"])
-    
-    # Botones de Acción
     col1, col2 = st.columns(2)
     with col1:
         ejecutar = st.button("🚀 Analizar", use_container_width=True)
     with col2:
         borrar = st.button("🗑️ Borrar", use_container_width=True)
 
-# Lógica de borrado
+# Lógica de borrado (Ahora purga la memoria completamente antes de recargar)
 if borrar:
-    st.rerun()
+    st.cache_data.clear() # Limpia datos descargados
+    for key in st.session_state.keys():
+        del st.session_state[key] # Limpia las cajas de texto y selectores
+    try:
+        st.rerun() # Reinicia la web (Streamlit moderno)
+    except AttributeError:
+        st.experimental_rerun() # Por si usas una versión más antigua
 
 # Lógica de Ejecución
 if ejecutar:
     lista_tickers = []
     
-    # Limpiar input manual
     if tickers_input:
         lista_tickers.extend([t.strip().upper() for t in tickers_input.split(',') if t.strip()])
         
-    # Añadir índice si está seleccionado
     if indice_seleccionado != "Ninguno":
         lista_tickers.extend(obtener_tickers_indice(indice_seleccionado))
         
-    # Eliminar duplicados
     lista_tickers = list(set(lista_tickers))
     
     if len(lista_tickers) == 0:
@@ -180,20 +181,17 @@ if ejecutar:
     else:
         st.info(f"Procesando {len(lista_tickers)} activos. Esto puede tardar unos segundos...")
         
-        # Ejecutar modelo
         df_resultado = calcular_indicador_riallo(lista_tickers)
         
         if not df_resultado.empty:
             st.success("✅ Análisis completado con éxito.")
             
-            # Formato visual en la web (Mapas de calor)
             st.dataframe(
                 df_resultado.style.background_gradient(cmap='RdYlGn', subset=['RIALLO_SCORE', 'Salud', 'Calidad', 'Valoracion', 'Retorno']),
                 use_container_width=True,
                 height=500
             )
             
-            # --- BOTÓN DE DESCARGA EXCEL ---
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df_resultado.to_excel(writer, sheet_name='Ranking Riallo', index=False)
