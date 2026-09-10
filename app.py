@@ -17,33 +17,44 @@ PESOS_INTRA = {
     'Shareholder_Yield': 1.00
 }
 
-# --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES ---
+# --- FUNCIONES DE EXTRACCIÓN DE ÍNDICES (ROBUSTAS) ---
 @st.cache_data(show_spinner=False)
 def obtener_tickers_indice(indice):
-    # Camuflaje: Simulamos ser un navegador Chrome en Windows para que Wikipedia no nos bloquee
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     
-    if indice == "Dow Jones (30)":
-        url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
-        html = requests.get(url, headers=headers).text
-        df = pd.read_html(io.StringIO(html))[1]
-        return df['Symbol'].tolist()
-        
-    elif indice == "S&P 500 (500)":
-        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        html = requests.get(url, headers=headers).text
-        df = pd.read_html(io.StringIO(html))[0]
-        return df['Symbol'].str.replace('.', '-').tolist()
-        
-    elif indice == "NASDAQ 100":
-        url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-        html = requests.get(url, headers=headers).text
-        df = pd.read_html(io.StringIO(html))[4]
-        return df['Ticker'].tolist()
-        
-    elif indice == "IBEX 35":
-        # Hardcodeado por la dificultad de scraping limpio del IBEX en Wikipedia
-        return ["SAN.MC", "BBVA.MC", "ITX.MC", "IBE.MC", "TEF.MC", "REP.MC", "AMS.MC", "AENA.MC", "FER.MC", "CABK.MC", "IAG.MC", "GRF.MC", "ENG.MC", "ELE.MC", "RED.MC", "NTGY.MC", "ACS.MC", "ANA.MC", "BKT.MC", "MAP.MC", "FDR.MC", "SAB.MC", "CLNX.MC", "MRL.MC", "COL.MC", "VIS.MC", "ROVI.MC", "LOG.MC", "UNI.MC", "MEL.MC", "ALM.MC", "IDR.MC", "SCYR.MC", "FLUI.MC", "CIE.MC"]
+    try:
+        if indice == "Dow Jones (30)":
+            url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
+            html = requests.get(url, headers=headers).text
+            tablas = pd.read_html(io.StringIO(html))
+            for df in tablas:
+                for col in ['Symbol', 'Ticker', 'Ticker symbol']:
+                    if col in df.columns:
+                        return df[col].tolist()
+                        
+        elif indice == "S&P 500 (500)":
+            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+            html = requests.get(url, headers=headers).text
+            tablas = pd.read_html(io.StringIO(html))
+            for df in tablas:
+                for col in ['Symbol', 'Ticker', 'Ticker symbol']:
+                    if col in df.columns:
+                        return df[col].str.replace('.', '-').tolist()
+                        
+        elif indice == "NASDAQ 100":
+            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+            html = requests.get(url, headers=headers).text
+            tablas = pd.read_html(io.StringIO(html))
+            for df in tablas:
+                for col in ['Symbol', 'Ticker', 'Ticker symbol', 'Ticker Symbol']:
+                    if col in df.columns:
+                        return df[col].tolist()
+                        
+        elif indice == "IBEX 35":
+            return ["SAN.MC", "BBVA.MC", "ITX.MC", "IBE.MC", "TEF.MC", "REP.MC", "AMS.MC", "AENA.MC", "FER.MC", "CABK.MC", "IAG.MC", "GRF.MC", "ENG.MC", "ELE.MC", "RED.MC", "NTGY.MC", "ACS.MC", "ANA.MC", "BKT.MC", "MAP.MC", "FDR.MC", "SAB.MC", "CLNX.MC", "MRL.MC", "COL.MC", "VIS.MC", "ROVI.MC", "LOG.MC", "UNI.MC", "MEL.MC", "ALM.MC", "IDR.MC", "SCYR.MC", "FLUI.MC", "CIE.MC"]
+            
+    except Exception as e:
+        st.error(f"Aviso Quant: Fallo al conectar con la base de datos de Wikipedia para {indice}. Intenta con tickers manuales.")
         
     return []
 
@@ -143,7 +154,6 @@ with st.sidebar:
     with col1:
         ejecutar = st.button("🚀 Analizar", use_container_width=True)
     with col2:
-        # Streamlit recarga la app al pulsar un botón que altera el session_state
         borrar = st.button("🗑️ Borrar", use_container_width=True)
 
 # Lógica de borrado
@@ -184,7 +194,6 @@ if ejecutar:
             )
             
             # --- BOTÓN DE DESCARGA EXCEL ---
-            # Guardamos el Excel en un buffer de memoria, no en disco
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df_resultado.to_excel(writer, sheet_name='Ranking Riallo', index=False)
